@@ -1,0 +1,21 @@
+{
+  "titel": "Badsanierung Erdgeschoss",
+  "referenz": "Anfrage vom 10.10.2026",
+  "kunde": { "name": "Muster GmbH", "ort": "Berlin" },
+  "gueltigTage": 30,
+  "notizen": "Preise gelten bei Ausfuehrung im 4. Quartal 2026.",
+  "parameter": {
+    "lohnkostensatz": 45,
+    "zuschlaege": { "material": 15, "lohn": 60, "fremdleistung": 10 },
+    "wagnisGewinn": 10,
+    "steuersatz": 19,
+    "mindestMargeProzent": 20
+  },
+  "positionen": [
+    { "name": "Wandfliesen 30x60, anthrazit", "menge": 18, "einheit": "m²", "ek": 32.5 },
+    { "name": "Fliesenkleber flexibel 25 kg", "menge": 6, "einheit": "Sack", "ek": 18.9 },
+    { "name": "Fliesenarbeiten", "typ": "lohn", "stunden": 22 },
+    { "name": "Demontage Altbestand", "typ": "lohn", "stunden": 6, "rabatt": 10 },
+    { "name": "Entsorgung Bauschutt (Containerdienst)", "typ": "fremdleistung", "menge": 1, "einheit": "psch", "ek": 380 }
+  ]
+}

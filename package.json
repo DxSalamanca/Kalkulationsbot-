@@ -1,0 +1,16 @@
+{
+  "name": "kalkulationsbot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Angebote kalkulieren (Zuschlagskalkulation) und als Entwurf im Nexus ERP anlegen",
+  "type": "module",
+  "engines": { "node": ">=20.12" },
+  "bin": { "kalkulation": "bin/kalkulation.js" },
+  "scripts": {
+    "start": "node src/server.js",
+    "kalkulation": "node bin/kalkulation.js",
+    "beispiel": "node bin/kalkulation.js examples/badsanierung.json --offline",
+    "test": "node --test"
+  },
+  "license": "UNLICENSED"
+}

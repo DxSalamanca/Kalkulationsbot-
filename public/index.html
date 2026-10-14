@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kalkulationsbot</title>
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Kalkulationsbot</h1>
+    <span id="status" class="status">Verbindung wird geprüft …</span>
+  </header>
+
+  <main>
+    <section class="karte">
+      <h2>Angebot</h2>
+      <div class="raster">
+        <label>Titel <input id="titel" placeholder="z. B. Badsanierung EG"></label>
+        <label>Referenz <input id="referenz" placeholder="z. B. Anfrage vom 10.10."></label>
+        <label>Gültig (Tage) <input id="gueltigTage" type="number" min="0" value="30"></label>
+      </div>
+      <div class="raster">
+        <label>Kunde suchen (ERP)
+          <input id="kundeSuche" list="kundenListe" placeholder="Name oder Ort" autocomplete="off">
+          <datalist id="kundenListe"></datalist>
+        </label>
+        <label>oder Kundenname <input id="kundeName"></label>
+        <label>Ort <input id="kundeOrt"></label>
+      </div>
+      <p id="kundeGewaehlt" class="hinweis"></p>
+    </section>
+
+    <section class="karte">
+      <h2>Kalkulationsparameter</h2>
+      <div class="raster">
+        <label>Lohnkosten €/h <input id="lohnkostensatz" type="number" step="0.01" min="0"></label>
+        <label>GK Material % <input id="zMaterial" type="number" step="0.1" min="0"></label>
+        <label>GK Lohn % <input id="zLohn" type="number" step="0.1" min="0"></label>
+        <label>GK Fremdleistung % <input id="zFremd" type="number" step="0.1" min="0"></label>
+        <label>Wagnis &amp; Gewinn % <input id="wagnisGewinn" type="number" step="0.1" min="0"></label>
+        <label>MwSt % <input id="steuersatz" type="number" step="1" min="0"></label>
+      </div>
+      <p class="hinweis">Leere Felder = Werte aus der Server-Konfiguration (.env).</p>
+    </section>
+
+    <section class="karte">
+      <h2>Positionen</h2>
+      <table id="positionen">
+        <thead>
+          <tr><th>Typ</th><th>Artikel-Nr.</th><th>Bezeichnung</th><th>Menge / Std.</th><th>Einheit</th><th>EK €</th><th>fester VK €</th><th>Rabatt %</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <datalist id="artikelListe"></datalist>
+      <div class="aktionen">
+        <button id="neuMaterial" type="button">+ Material</button>
+        <button id="neuLohn" type="button">+ Lohn</button>
+        <button id="neuFremd" type="button">+ Fremdleistung</button>
+      </div>
+      <p class="hinweis">Mit Artikel-Nr. werden EK, Bezeichnung und Mindest-VK aus dem ERP übernommen, wenn die Felder leer bleiben.</p>
+    </section>
+
+    <section class="karte">
+      <div class="aktionen">
+        <button id="berechnen" type="button" class="primaer">Berechnen</button>
+        <button id="senden" type="button" disabled>Als Angebot ins ERP</button>
+      </div>
+      <div id="meldungen" role="status" aria-live="polite"></div>
+      <div id="ergebnis"></div>
+    </section>
+  </main>
+</body>
+</html>
