@@ -142,6 +142,27 @@ export class NexusClient {
     return antwort?.data ?? [];
   }
 
+  /**
+   * Stueckliste eines Erzeugnisses mit Einkaufspreisen der Komponenten.
+   * Liefert null, wenn der Artikel keine aktive Stueckliste hat.
+   * @param {string} artikelId
+   * @param {{ menge?: number, rekursiv?: boolean }} [opts]
+   */
+  async stuecklisteLaden(artikelId, { menge = 1, rekursiv = true } = {}) {
+    try {
+      return await this.#anfrage("GET", "/stuecklisten", { query: { artikelId, menge, rekursiv } });
+    } catch (e) {
+      if (e instanceof NexusFehler && e.status === 404) return null;
+      throw e;
+    }
+  }
+
+  /** Aktive Stuecklisten auflisten. */
+  async stuecklistenListe(limit = 100) {
+    const antwort = await this.#anfrage("GET", "/stuecklisten", { query: { limit } });
+    return antwort?.data ?? [];
+  }
+
   /** Kunden per Freitext suchen. */
   async kundenSuchen(q, limit = 20) {
     const antwort = await this.#anfrage("GET", "/kunden", { query: { q, limit } });

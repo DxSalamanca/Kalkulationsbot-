@@ -44,6 +44,12 @@ function neueZeile(typ, werte = {}) {
   tr.append(
     el("td", {}, el("span", { class: `typ typ-${typ}` }, { material: "Material", lohn: "Lohn", fremdleistung: "Fremdl." }[typ])),
     feld("artikelId", { list: "artikelListe", disabled: lohn, placeholder: lohn ? "–" : "" }),
+    el("td", {}, typ === "material"
+      ? el("select", { name: "stueckliste", title: "Materialkosten aus der Stückliste im ERP" },
+          el("option", { value: "", textContent: "–" }),
+          el("option", { value: "summe", textContent: "als Summe" }),
+          el("option", { value: "einzeln", textContent: "einzeln" }))
+      : "–"),
     feld("name"),
     feld("menge", { type: "number", step: "0.01", min: "0" }),
     feld("einheit", { placeholder: lohn ? "h" : "Stk" }),
@@ -62,7 +68,7 @@ function zahlOderLeer(v) {
 
 function sammeleDaten() {
   const positionen = [...$("positionen").tBodies[0].rows].map((tr) => {
-    const w = Object.fromEntries([...tr.querySelectorAll("input")].map((i) => [i.name, i.value.trim()]));
+    const w = Object.fromEntries([...tr.querySelectorAll("input, select")].map((i) => [i.name, i.value.trim()]));
     const typ = tr.dataset.typ;
     const p = { typ, name: w.name || undefined, einheit: w.einheit || undefined };
     if (typ === "lohn") p.stunden = zahlOderLeer(w.menge);
@@ -70,6 +76,7 @@ function sammeleDaten() {
       p.menge = zahlOderLeer(w.menge);
       p.ek = zahlOderLeer(w.ek);
       if (w.artikelId) p.artikelId = w.artikelId;
+      if (w.stueckliste) p.stueckliste = w.stueckliste;
     }
     p.vk = zahlOderLeer(w.vk);
     p.rabatt = zahlOderLeer(w.rabatt);

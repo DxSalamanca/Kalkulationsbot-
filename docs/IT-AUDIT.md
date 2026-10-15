@@ -1,14 +1,15 @@
 # IT-Audit: Anbindung Kalkulationsbot ↔ Nexus ERP
 
-Stand: 14.10.2026 · Umfang: Repository `Kalkulationsbot-`, Public API v1 und
-API-Key-Verwaltung von `nexus-erp`, Abhängigkeiten und CI von `nexus-erp`.
+Stand: 15.10.2026 · Umfang: Repository `Kalkulationsbot-`, Public API v1,
+API-Key-Verwaltung und Stücklisten-Modul von `nexus-erp`, Abhängigkeiten und CI von `nexus-erp`.
 
 ## 1. Zusammenfassung
 
 | Bereich | Vorher | Nachher |
 |---|---|---|
-| Kalkulationsbot | Repository leer, kein Code | Kalkulation, ERP-Client, Web-Oberfläche, Kommandozeile, 28 Tests, CI |
-| Public API v1 des ERP | **funktionierte nie** (jeder Aufruf 401/500) | repariert, getestet, neuer Artikel-Endpunkt |
+| Kalkulationsbot | Repository leer, kein Code | Kalkulation inkl. Stücklisten, ERP-Client, Web-Oberfläche, Kommandozeile, 32 Tests, CI |
+| Public API v1 des ERP | **funktionierte nie** (jeder Aufruf 401/500) | repariert, getestet, neue Endpunkte für Artikel und Stücklisten |
+| Stücklisten im ERP | für Artikelnummern wie „A-001“ nicht anlegbar, Detailansicht und „Menge ändern“ defekt | repariert, per API mit Einkaufspreisen abrufbar |
 | API-Key-Sicherheit | jeder Benutzer konnte Keys mit beliebigen Rechten ausstellen, Widerruf defekt, IP-Sperre wirkungslos | nur Admins, Widerruf funktioniert, IP-Allowlist wird durchgesetzt |
 | Angebote per API | ohne Belegnummer (Anlage scheiterte), Status/Zahlung von außen setzbar | Nummer aus dem Nummernkreis, immer Entwurf, Positionen geprüft, Audit-Log |
 | Abhängigkeiten | 1 kritische, 14 hohe Lücken (npm audit), Security-Scan wertete nie aus | Scan repariert. **Next.js-Update steht noch aus (kritisch, siehe O1)** |
@@ -43,7 +44,16 @@ Die Anbindung ist damit technisch möglich. Bevor sie produktiv geht, muss
 | A8 | niedrig | Die OpenAPI-Spezifikation dokumentierte Positionsfelder `bezeichnung/menge/einzelpreis`, der Server erwartet `name/quantity/unitPrice`. | Wer nach Doku integriert, erzeugt Belege über 0,00 €. | Spezifikation korrigiert, Artikel-Endpunkt und 422 dokumentiert. |
 | A9 | mittel | Der Security-Workflow las `nexus-erp/audit-report.json` (falscher Pfad) per `require('/dev/stdin')`. | Die Prüfung auf kritische Lücken griff nie. | Pfad und Einlesen korrigiert. Der Scan meldet jetzt O1 und schlägt deshalb auf `main` fehl, bis Next.js aktualisiert ist. Das ist gewollt. |
 
-Neu: `GET /api/v1/artikel` (Scope `artikel:read`) mit EK, VK und Mindest-VK.
+| A10 | **hoch** | Stücklisten-Routen lasen Artikelnummern per `Number()`. `artikel.id` ist aber Text („A-001“). | Für solche Artikel ließ sich keine Stückliste anlegen, keine Komponente hinzufügen und keine Auflösung berechnen (400 bzw. Fremdschlüsselfehler). | Artikelnummern werden als Text gelesen (`stuecklisten`, `komponenten`, `[id]/positionen`, `aufloesung`). |
+| A11 | **hoch** | Gleicher Fehler wie A3 (synchrones `params`, Next 16) in 7 weiteren Routen: Stücklisten-Detail, Materialbedarf und Positionen, Verträge, Inventur, CRM-Pipeline, Automatisierungs-Jobs. | Öffnen, Ändern und Löschen einzelner Einträge lief ins Leere. | `await params`. |
+| A12 | mittel | Die Stücklisten-Seite ruft für „Menge ändern“ `PATCH /api/stuecklisten/[id]/positionen/[posId]` auf. Diese Route gab es nicht. | Mengenänderungen gingen still verloren. | Route ergänzt. |
+
+Neu:
+- `GET /api/v1/artikel` (Scope `artikel:read`) mit EK, VK und Mindest-VK.
+- `GET /api/v1/stuecklisten` (Scope `artikel:read`): Liste aktiver Stücklisten, oder mit
+  `artikelId` die bis auf Kaufteile aufgelöste Stückliste mit Einkaufspreisen und
+  Materialkosten. Sie wird pro Ebene gesammelt geladen. Zyklen und gelöschte Komponenten
+  meldet sie als Warnung, statt sie still zu übergehen.
 
 ## 4. Offene Befunde und Empfehlungen
 
@@ -74,6 +84,7 @@ Neu: `GET /api/v1/artikel` (Scope `artikel:read`) mit EK, VK und Mindest-VK.
                                                     │ pruefeApiKey: Hash, aktiv, Ablauf, IP │
                                                     │ Scope-Prüfung, Rate-Limit je Key      │
                                                     │ GET  /api/v1/artikel  (artikel:read)  │
+                                                    │ GET  /api/v1/stuecklisten (artikel:r.)│
                                                     │ GET  /api/v1/kunden   (kunden:read)   │
                                                     │ POST /api/v1/belege   (belege:write)  │
                                                     │  └ Nummernkreis, Entwurf, Audit-Log   │
@@ -100,7 +111,8 @@ Grundsätze:
    `NEXUS_API_KEY` eintragen und die Zuschlagssätze aus der eigenen
    Betriebsabrechnung setzen.
 4. `npm test`, danach `node bin/kalkulation.js examples/badsanierung.json` (Vorschau
-   mit Live-Verbindung). Bei Erfolg einmal `--senden` und den Entwurf im ERP unter
+   mit Live-Verbindung). Mit `node bin/kalkulation.js --stuecklisten` prüfen, ob die
+   Stücklisten ankommen. Bei Erfolg einmal `--senden` und den Entwurf im ERP unter
    *Verkauf* prüfen.
 5. Optional `npm start` für die Web-Oberfläche.
 
@@ -134,10 +146,11 @@ Grundsätze:
 
 ## 8. Ergebnis der Prüfläufe
 
-- `nexus-erp`: `vitest` 499/499 grün (davon 17 neu), `eslint` ohne Warnungen auf allen
+- `nexus-erp`: `vitest` 505/505 grün (davon 23 neu), `eslint` ohne Warnungen auf allen
   geänderten Dateien, `next build` erfolgreich. Der Spaltencheck (`npm run db:spalten`)
   braucht eine Datenbank und läuft in CI.
-- `Kalkulationsbot-`: `node --test` 28/28 grün, Web-Oberfläche im Browser
-  durchgeklickt (Berechnung offline, keine JS-Fehler).
+- `Kalkulationsbot-`: `node --test` 32/32 grün. Die Web-Oberfläche wurde im Browser
+  durchgeklickt, offline und gegen eine nachgebaute Nexus-API: Kunde gesucht,
+  Stückliste als Summe kalkuliert, Angebot angelegt, keine JS-Fehler.
 - **Nicht** durchgeführt: Ende-zu-Ende-Test gegen ein laufendes Nexus mit echter
   Datenbank. Das ist Schritt 4 der Einrichtung.

@@ -139,3 +139,87 @@ test("Parameter aus Umgebungsvariablen", () => {
   assert.equal(p.zuschlaege.lohn, "55");
   assert.equal(p.zuschlaege.material, undefined);
 });
+
+// --- Stuecklisten -----------------------------------------------------------
+
+const TISCH = {
+  artikelId: "TISCH", menge: 1, rekursiv: true,
+  stueckliste: { id: 1, name: "Tisch komplett" },
+  komponenten: [
+    { artikelId: "PLATTE", name: "Tischplatte", menge: 1, einheit: "Stk", purchasePrice: 80 },
+    { artikelId: "BEIN", name: "Tischbein", menge: 4, einheit: "Stk", purchasePrice: 12.5 },
+  ],
+  materialkosten: 130,
+  warnungen: [],
+};
+
+function erpMitStueckliste(stueckliste = TISCH) {
+  return fakeErp({
+    artikel: [
+      { id: "TISCH", name: "Esstisch Eiche", purchasePrice: 0, salePrice: 499, minSalePrice: 150 },
+      { id: "PLATTE", name: "Tischplatte", purchasePrice: 80, salePrice: 0, minSalePrice: null },
+      { id: "BEIN", name: "Tischbein", purchasePrice: 12.5, salePrice: 0, minSalePrice: null },
+    ],
+    antworten: {
+      "GET /api/v1/stuecklisten": () => (stueckliste ? { status: 200, body: stueckliste } : { status: 404, body: { error: "keine" } }),
+    },
+  });
+}
+
+const OHNE_ZUSCHLAG = { zuschlaege: { material: 0 }, wagnisGewinn: 0 };
+
+test("Stueckliste als Summe: eine Zeile, EK = Materialkosten, Name aus dem ERP", async () => {
+  const erp = erpMitStueckliste();
+  const { fehler, ergebnis } = await angebotVorbereiten({
+    parameter: OHNE_ZUSCHLAG,
+    positionen: [{ artikelId: "TISCH", menge: 2, stueckliste: "summe" }, { name: "Montage", typ: "lohn", stunden: 1 }],
+  }, { client: client(erp) });
+
+  assert.deepEqual(fehler, []);
+  const [tisch, lohn] = ergebnis.positionen;
+  assert.equal(tisch.name, "Esstisch Eiche");
+  assert.equal(tisch.einzelkosten, 130);
+  assert.equal(tisch.nettoZeile, 260);
+  assert.match(tisch.beschreibung, /4 Stk Tischbein/);
+  assert.equal(lohn.nr, 2);
+  // Mindest-VK 150 des Erzeugnisses wird geprueft (VK 130 < 150)
+  assert.ok(ergebnis.warnungen.some((w) => w.includes("Mindest-VK")));
+  const sl = erp.aufrufe.find((a) => a.pfad === "/api/v1/stuecklisten");
+  assert.deepEqual(sl.query, { artikelId: "TISCH", menge: "1", rekursiv: "true" });
+});
+
+test("Stueckliste einzeln: Komponenten werden eigene Zeilen (Menge x Stueckzahl)", async () => {
+  const { fehler, ergebnis } = await angebotVorbereiten({
+    parameter: OHNE_ZUSCHLAG,
+    positionen: [{ artikelId: "TISCH", menge: 3, stueckliste: "einzeln", rabatt: 5 }],
+  }, { client: client(erpMitStueckliste()) });
+
+  assert.deepEqual(fehler, []);
+  assert.deepEqual(
+    ergebnis.positionen.map((p) => [p.nr, p.artikelId, p.menge, p.einzelkosten, p.rabatt]),
+    [[1, "PLATTE", 3, 80, 5], [2, "BEIN", 12, 12.5, 5]]
+  );
+});
+
+test("Stueckliste: fehlende Stueckliste, ERP-Warnungen und Offline-Betrieb sind Fehler", async () => {
+  const ohne = await angebotVorbereiten({ positionen: [{ artikelId: "TISCH", menge: 1, stueckliste: "summe" }] },
+    { client: client(erpMitStueckliste(null)) });
+  assert.match(ohne.fehler[0], /keine aktive Stueckliste/);
+
+  const zyklus = await angebotVorbereiten({ positionen: [{ artikelId: "TISCH", menge: 1, stueckliste: "summe" }] },
+    { client: client(erpMitStueckliste({ ...TISCH, warnungen: ["Zyklus in der Stueckliste: BEIN"] })) });
+  assert.match(zyklus.fehler[0], /Zyklus/);
+
+  const offline = await angebotVorbereiten({ positionen: [{ artikelId: "TISCH", menge: 1, stueckliste: "summe" }] });
+  assert.match(offline.fehler[0], /ERP-Verbindung/);
+});
+
+test("Stueckliste: ungueltiger Modus oder ohne artikelId wird abgewiesen", async () => {
+  const { fehler } = await angebotVorbereiten({
+    positionen: [
+      { artikelId: "TISCH", menge: 1, stueckliste: "alles" },
+      { name: "X", menge: 1, ek: 1, stueckliste: "summe" },
+    ],
+  });
+  assert.equal(fehler.length, 2);
+});

@@ -1,0 +1,12 @@
+{
+  "titel": "Esstisch Eiche nach Maß",
+  "referenz": "Anfrage per Mail vom 14.10.2026",
+  "kunde": { "name": "Muster GmbH", "ort": "Berlin" },
+  "gueltigTage": 30,
+  "parameter": { "mindestMargeProzent": 25 },
+  "positionen": [
+    { "artikelId": "TISCH-01", "menge": 2, "stueckliste": "summe" },
+    { "name": "Fertigung und Oberflaeche", "typ": "lohn", "stunden": 6 },
+    { "name": "Lieferung und Montage", "typ": "fremdleistung", "menge": 1, "einheit": "psch", "ek": 120 }
+  ]
+}

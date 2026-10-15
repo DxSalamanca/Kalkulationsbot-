@@ -32,13 +32,14 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px; display: grid; gap: 16p
 .karte { background: var(--karte); border: 1px solid var(--rand); border-radius: 10px; padding: 16px; overflow-x: auto; }
 .raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 8px; }
 label { display: grid; gap: 4px; font-size: .85rem; color: var(--leise); }
+select { font: inherit; color: var(--text); background: var(--karte); border: 1px solid var(--rand); border-radius: 6px; padding: 6px 4px; }
 input { font: inherit; color: var(--text); background: transparent; border: 1px solid var(--rand); border-radius: 6px; padding: 6px 8px; width: 100%; min-width: 0; }
 input:disabled { opacity: .45; }
-input:focus-visible, button:focus-visible { outline: 2px solid var(--akzent); outline-offset: 1px; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--akzent); outline-offset: 1px; }
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--rand); vertical-align: middle; }
 th { font-size: .8rem; color: var(--leise); font-weight: 600; }
-#positionen td:nth-child(3) { min-width: 200px; }
+#positionen td:nth-child(4) { min-width: 200px; }
 #positionen td input { min-width: 70px; }
 table.ergebnis td:nth-child(n+3), table.ergebnis th:nth-child(n+3) { text-align: right; font-variant-numeric: tabular-nums; }
 button { font: inherit; border: 1px solid var(--rand); background: var(--karte); color: var(--text); border-radius: 6px; padding: 7px 12px; cursor: pointer; }

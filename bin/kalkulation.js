@@ -6,6 +6,7 @@
 //   node bin/kalkulation.js <kalkulation.json> --offline  Vorschau ohne ERP
 //   node bin/kalkulation.js <kalkulation.json> --senden   Angebot im ERP anlegen
 //   node bin/kalkulation.js <kalkulation.json> --json     Ergebnis als JSON
+//   node bin/kalkulation.js --stuecklisten                Stuecklisten im ERP auflisten
 // =============================================================================
 
 import { readFile } from "node:fs/promises";
@@ -18,13 +19,39 @@ function hilfe() {
 
 Aufruf:
   node bin/kalkulation.js <datei.json> [--offline] [--senden] [--json]
+  node bin/kalkulation.js --stuecklisten [ARTIKELNUMMER]
 
 Optionen:
   --offline  ohne ERP rechnen (alle EK-Preise muessen in der Datei stehen)
   --senden   Angebot als Entwurf im Nexus ERP anlegen
   --json     Ergebnis maschinenlesbar ausgeben
+  --stuecklisten  aktive Stuecklisten im ERP auflisten, mit Artikelnummer:
+                  Komponenten und Materialkosten anzeigen
 
 Umgebung (.env): NEXUS_URL, NEXUS_API_KEY, KALK_* (siehe README)`);
+}
+
+async function stuecklistenAnzeigen(client, artikelId) {
+  if (!artikelId) {
+    const liste = await client.stuecklistenListe();
+    if (!liste.length) console.log("Im ERP sind keine aktiven Stuecklisten angelegt.");
+    for (const s of liste) console.log(`${s.artikelId.padEnd(16)} ${s.name}`);
+    return 0;
+  }
+  const sl = await client.stuecklisteLaden(artikelId);
+  if (!sl) {
+    console.error(`Fuer Artikel ${artikelId} gibt es keine aktive Stueckliste.`);
+    return 2;
+  }
+  console.log(`${sl.stueckliste.name} (Artikel ${artikelId}), je 1 Einheit:`);
+  for (const k of sl.komponenten) {
+    const kosten = (k.menge * k.purchasePrice).toFixed(2);
+    console.log(`  ${String(k.menge).padStart(8)} ${k.einheit.padEnd(5)} ${(k.name ?? k.artikelId).padEnd(32)} ${kosten.padStart(10)} EUR`);
+  }
+  console.log(`  Materialkosten: ${sl.materialkosten.toFixed(2)} EUR`);
+  for (const w of sl.warnungen) console.log(`  ! ${w}`);
+  console.log(`\nIn der Kalkulation: { "artikelId": "${artikelId}", "menge": 1, "stueckliste": "summe" }  (oder "einzeln")`);
+  return 0;
 }
 
 async function main(argv) {
@@ -34,6 +61,12 @@ async function main(argv) {
     return args.length === 0 ? 1 : 0;
   }
   const datei = args.find((a) => !a.startsWith("--"));
+
+  if (args.includes("--stuecklisten")) {
+    try { process.loadEnvFile?.(); } catch { /* keine .env vorhanden */ }
+    const client = new NexusClient({ baseUrl: process.env.NEXUS_URL, apiKey: process.env.NEXUS_API_KEY });
+    return stuecklistenAnzeigen(client, datei);
+  }
   const offline = args.includes("--offline");
   const senden = args.includes("--senden");
   const alsJson = args.includes("--json");

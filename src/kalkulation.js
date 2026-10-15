@@ -16,6 +16,7 @@
 // =============================================================================
 
 export const KOSTENARTEN = ["material", "lohn", "fremdleistung"];
+export const STUECKLISTEN_MODI = ["summe", "einzeln"];
 
 // Beispielwerte – unbedingt an die eigene Betriebsabrechnung anpassen
 // (per Kalkulationsdatei "parameter" oder Umgebungsvariablen, siehe README).
@@ -119,6 +120,17 @@ export function positionenPruefen(roh) {
     } else {
       pos.menge = zahl(p?.menge, `${nr}: menge`, fehler, { min: 0, pflicht: true }) ?? 0;
       pos.ek = zahl(p?.ek, `${nr}: ek`, fehler, { min: 0, pflicht: !pos.artikelId });
+    }
+    if (p?.stueckliste != null) {
+      // "summe":   eine Zeile, EK = Materialkosten aus der ERP-Stueckliste
+      // "einzeln": jede Komponente der Stueckliste als eigene Zeile
+      if (!STUECKLISTEN_MODI.includes(p.stueckliste)) {
+        fehler.push(`${nr}: stueckliste muss "summe" oder "einzeln" sein`);
+      } else if (!pos.artikelId || typ !== "material") {
+        fehler.push(`${nr}: stueckliste braucht eine artikelId und typ "material"`);
+      } else {
+        pos.stueckliste = p.stueckliste;
+      }
     }
     if (!pos.name && !pos.artikelId) fehler.push(`${nr}: name oder artikelId erforderlich`);
     return pos;

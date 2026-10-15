@@ -1,11 +1,12 @@
 # Kalkulationsbot
 
 Kalkuliert Angebote nach dem Zuschlagsverfahren und legt sie als **Entwurf im
-Nexus ERP** an. Einkaufspreise, Artikelbezeichnungen und Mindest-VK kommen
-direkt aus dem ERP-Artikelstamm, die Angebotsnummer vergibt das ERP.
+Nexus ERP** an. Einkaufspreise, Artikelbezeichnungen, Mindest-VK und
+**Stücklisten** kommen direkt aus dem ERP, die Angebotsnummer vergibt das ERP.
 
 ```
 Kalkulationsbot ──GET /api/v1/artikel──▶ Nexus ERP   (EK, VK, Mindest-VK)
+                ──GET /api/v1/stuecklisten─▶         (Komponenten + Materialkosten)
                 ──GET /api/v1/kunden───▶             (Kundensuche)
                 ──POST /api/v1/belege──▶             (Angebot als Entwurf, Nummer vom ERP)
 ```
@@ -18,7 +19,7 @@ Den IT-Audit-Bericht zur Anbindung findest du in [`docs/IT-AUDIT.md`](docs/IT-AU
 - Nexus ERP mit Public API v1 (ab Branch `claude/it-audit-app-connection-vxi6w3`,
   davor war die API defekt, siehe Audit)
 - ein API-Key aus **Nexus > Einstellungen > API-Keys** (nur Administratoren) mit den
-  Berechtigungen `artikel:read`, `kunden:read`, `belege:write`. Am besten zusätzlich
+  Berechtigungen `artikel:read` (gilt auch für Stücklisten), `kunden:read`, `belege:write`. Am besten zusätzlich
   mit Ablaufdatum und auf die IP des Rechners beschränkt, auf dem der Bot läuft.
 
 ## Einrichtung
@@ -65,6 +66,8 @@ node bin/kalkulation.js examples/badsanierung.json --json     # maschinenlesbar
   "positionen": [
     { "artikelId": "ART-0815", "menge": 4 },                        // EK + Name aus dem ERP
     { "artikelId": "ART-0816", "menge": 1, "preisquelle": "liste" }, // Listen-VK aus dem ERP
+    { "artikelId": "TISCH-01", "menge": 2, "stueckliste": "summe" },  // EK = Materialkosten der Stückliste
+    { "artikelId": "TISCH-01", "menge": 2, "stueckliste": "einzeln" },// jede Komponente als eigene Zeile
     { "name": "Fliesen", "menge": 18, "einheit": "m²", "ek": 32.5 },
     { "name": "Montage", "typ": "lohn", "stunden": 6 },
     { "name": "Meister", "typ": "lohn", "stunden": 1, "kostensatz": 62 },
@@ -73,6 +76,28 @@ node bin/kalkulation.js examples/badsanierung.json --json     # maschinenlesbar
   ]
 }
 ```
+
+### Stücklisten
+
+Für gefertigte Artikel holt der Bot die Stückliste aus Nexus. Baugruppen werden
+dabei bis auf die Kaufteile aufgelöst, jeweils mit aktuellem Einkaufspreis.
+
+| `"stueckliste"` | Ergebnis im Angebot |
+|---|---|
+| `"summe"` | **eine** Zeile für den Artikel. Einzelkosten = Materialkosten laut Stückliste, die Zusammensetzung steht in der Positionsbeschreibung. Ein `ek` in der Datei hat Vorrang. |
+| `"einzeln"` | **jede Komponente** als eigene Materialzeile (Menge × Stückzahl), Rabatt der Zeile wird übernommen |
+
+Arbeitszeit für Montage oder Fertigung gehört als eigene `lohn`-Position dazu.
+Meldet Nexus einen Zyklus oder eine gelöschte Komponente, bricht die
+Kalkulation ab, denn der Preis wäre sonst zu niedrig.
+
+```bash
+node bin/kalkulation.js --stuecklisten            # welche Stücklisten gibt es?
+node bin/kalkulation.js --stuecklisten TISCH-01   # Komponenten + Materialkosten
+node bin/kalkulation.js examples/esstisch.json    # Beispiel-Kalkulation mit Stückliste
+```
+
+In der Web-Oberfläche gibt es dafür die Spalte **Stückliste** (bei Material-Zeilen).
 
 ### Rechenweg je Position
 

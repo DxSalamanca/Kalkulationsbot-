@@ -2,7 +2,8 @@
 // Angebot vorbereiten – verbindet Kalkulation und Nexus ERP
 // -----------------------------------------------------------------------------
 //   1. Parameter und Positionen pruefen
-//   2. Artikelpreise (EK, Listen-VK, Mindest-VK) aus dem ERP nachladen
+//   2. Stuecklisten aufloesen, Artikelpreise (EK, Listen-VK, Mindest-VK)
+//      aus dem ERP nachladen
 //   3. Kalkulieren
 //   4. Payload fuer POST /api/v1/belege bauen
 // =============================================================================
@@ -53,6 +54,68 @@ export function artikelUebernehmen(positionen, artikelMap) {
   return fehler;
 }
 
+/**
+ * Loest Positionen mit "stueckliste" ueber das ERP auf.
+ *   summe:   EK der Zeile = Materialkosten je Einheit laut Stueckliste
+ *   einzeln: die Zeile wird durch ihre Komponenten ersetzt (Menge x Stueckzahl)
+ * Warnungen des ERP (Zyklen, geloeschte Komponenten) werden zu Fehlern –
+ * mit unvollstaendiger Stueckliste waere der Preis zu niedrig.
+ *
+ * @returns {Promise<{ positionen: object[], fehler: string[] }>}
+ */
+export async function stuecklistenAufloesen(positionen, client) {
+  const fehler = [];
+  if (!positionen.some((p) => p.stueckliste)) return { positionen, fehler };
+  if (!client) {
+    return {
+      positionen,
+      fehler: positionen.filter((p) => p.stueckliste).map((p) => `Position ${p.nr}: Stueckliste braucht eine ERP-Verbindung`),
+    };
+  }
+
+  const cache = new Map();
+  const ergebnis = [];
+  for (const p of positionen) {
+    if (!p.stueckliste) {
+      ergebnis.push(p);
+      continue;
+    }
+    if (!cache.has(p.artikelId)) cache.set(p.artikelId, await client.stuecklisteLaden(p.artikelId, { menge: 1 }));
+    const sl = cache.get(p.artikelId);
+    if (!sl) {
+      fehler.push(`Position ${p.nr}: fuer Artikel "${p.artikelId}" gibt es im ERP keine aktive Stueckliste`);
+      continue;
+    }
+    for (const w of sl.warnungen ?? []) fehler.push(`Position ${p.nr}: Stueckliste ${sl.stueckliste?.name ?? p.artikelId}: ${w}`);
+
+    if (p.stueckliste === "summe") {
+      ergebnis.push({
+        ...p,
+        ek: p.ek ?? sl.materialkosten,
+        beschreibung: p.beschreibung || `Stückliste: ${sl.komponenten.map((k) => `${k.menge} ${k.einheit} ${k.name ?? k.artikelId}`).join(", ")}`.slice(0, 2000),
+      });
+    } else {
+      for (const k of sl.komponenten) {
+        ergebnis.push({
+          nr: 0,
+          typ: "material",
+          artikelId: k.artikelId,
+          name: k.name ?? k.artikelId,
+          beschreibung: "",
+          einheit: k.einheit || "Stk",
+          rabatt: p.rabatt,
+          vk: undefined,
+          preisquelle: "kalkuliert",
+          menge: Math.round(p.menge * k.menge * 100000) / 100000,
+          ek: k.purchasePrice,
+        });
+      }
+    }
+  }
+  ergebnis.forEach((p, i) => { p.nr = i + 1; });
+  return { positionen: ergebnis, fehler };
+}
+
 function kundeAngaben(kunde) {
   if (!kunde) return {};
   if (kunde.id != null && kunde.id !== "") return { customerId: String(kunde.id) };
@@ -99,9 +162,12 @@ export async function angebotVorbereiten(daten, { client, envParameter } = {}) {
   if (!daten || typeof daten !== "object") return { fehler: ["Kalkulationsdatei ist leer oder kein JSON-Objekt"] };
 
   const { parameter, fehler: pFehler } = parameterZusammenfuehren(envParameter, daten.parameter);
-  const { positionen, fehler: posFehler } = positionenPruefen(daten.positionen);
+  const { positionen: geprueft, fehler: posFehler } = positionenPruefen(daten.positionen);
   const fehler = [...pFehler, ...posFehler];
   if (fehler.length) return { fehler };
+
+  const { positionen, fehler: slFehler } = await stuecklistenAufloesen(geprueft, client);
+  if (slFehler.length) return { fehler: slFehler };
 
   const artikelIds = positionen.map((p) => p.artikelId).filter(Boolean);
   const artikelMap = client && artikelIds.length ? await client.artikelLaden(artikelIds) : null;
